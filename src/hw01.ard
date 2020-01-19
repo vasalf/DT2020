@@ -1,6 +1,8 @@
 -- 1. Установите arend, следуя инструкциям на странице https://arend-lang.github.io/download
 --    В IDEA можно просто импортировать данный проект.
 
+-- VA: Done =)
+
 -- 2. Определите аналоги следующих функций на языке хаскелл.
 {- Haskell:
    second :: Nat -> Nat -> Nat -> Nat
@@ -18,15 +20,30 @@
    second' = flip (second 0)
 -}
 
+\func second (_ y _ : Nat) => y
+\func apply (f : Nat -> Nat) (x : Nat) => f x
+\func compose (f : Nat -> Nat) (g : Nat -> Nat) (x : Nat) => f (g x)
+\func flip (f : Nat -> Nat -> Nat) (x y : Nat) => f y x
+\func second' => flip (second 0)
+
+\func testSecond' : second' 1 2 = 2 => idp
+
 -- 3. Расставьте приоритеты функций f1, f2, f3, f4, f5 и f6 так, чтобы функция test проходила тайпчекинг.
 
 \import lect01
 
 \func f1 (x y : Nat) => x
 \func f2 : Nat => 0
-\func f3 (f : Nat -> Nat) (z : Nat) : Int => 0
+\func \infixl 1 f3 (f : Nat -> Nat) (z : Nat) : Int => 0
 \func f4 : Nat => 0
-\func f5 => f1
+\func \infixl 2 f5 => f1
 \func f6 => f4
 
 \func test => f1 f2 f3 f4 f5 f6
+{- А ещё работает так:
+
+   \func test => f1 f2 `f3` f4 `f5` f6
+
+   Довольно любопытно, что автоматически выходит правильно, а если руками задать равные приоритеты, выходит неправильно.
+   Видимо, приоритеты сами выводятся.
+ -}
