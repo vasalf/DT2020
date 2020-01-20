@@ -1,14 +1,17 @@
 \import lect02 \hiding (+,*)
 \open Nat \hiding (-,div) -- Здесь лежат + и *.
 
--- I. Задания на рекурсивные определения.
-
 -- 1. Определите функцию if, аналогичную следующей функции:
 {- Haskell:
    if :: Bool -> a -> a -> a
    if True t _ = t
    if False _ e = e
 -}
+
+\record C {
+  | number : Nat
+  \func bar => 202
+}
 
 -- 2. Определите || через if.
 
