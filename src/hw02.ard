@@ -8,11 +8,6 @@
    if False _ e = e
 -}
 
-\record C {
-  | number : Nat
-  \func bar => 202
-}
-
 -- 2. Определите || через if.
 
 \func \infixr 2 || (x y : Bool) : Bool => {?}
