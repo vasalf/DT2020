@@ -1,21 +1,36 @@
 \import Utils
+\import lect04
+\import lect05 (+-comm, Nat-elim, Nat-rec, funExt)
 \open Nat \hiding (<=)
 
 -- 1. Определите конгруэнтность для функций двух аргументов через transport.
 --    Можно использовать любые функции, определенные через transport.
 
-\func pmap2 {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b' => {?}
+\func pmap2 {A B C : \Type}
+            (f : A -> B -> C)
+            {a a' : A} (p : a = a')
+            {b b' : B} (q : b = b')
+  : f a b = f a' b'
+  => transport (\lam x => f a b = f a' x) q
+      (transport (\lam x => f a b = f x b) p idp)
 
 -- 2. Докажите, что transport выражается через pmap и repl и наоборот.
 
 -- repl говорит, что если у нас есть два равных типа, то у нас есть функция из одного во второй.
 -- Определите repl через transport.
 
-\func repl {A B : \Type} (p : A = B) (a : A) : B => {?}
+\func repl {A B : \Type}
+           (p : A = B)
+  : A -> B => transport (\lam T => A -> T) p (\lam x => x)
 
 -- Определите transport через repl и pmap.
 
-\func transport' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a' => {?}
+\func transport' {A : \Type}
+                 (B : A -> \Type)
+                 {a a' : A}
+                 (p : a = a')
+                 (b : B a)
+  : B a' => repl (pmap B p) b
 
 -- 3. Докажите, что reverse (reverse xs) = xs, где reverse определен через ++.
 
@@ -29,16 +44,56 @@
   | nil => nil
   | cons x xs => reverse xs ++ cons x nil
 
--- Это утверждение будет полезно для доказательства.
-\func reverse++ {A : \Type} (xs ys : List A) : reverse (xs ++ ys) = reverse ys ++ reverse xs => {?}
+\func nil-neutral {A : \Type} (xs : List A) : xs ++ nil = xs \elim xs
+  | nil => idp
+  | cons a l => pmap (cons a) (nil-neutral l)
 
-\func reverse-isInvolutive {A : \Type} (xs : List A) : reverse (reverse xs) = xs => {?}
+\func ++-assoc {A : \Type}
+               (xs ys zs : List A)
+  : (xs ++ ys) ++ zs = xs ++ (ys ++ zs) \elim xs
+  | nil => idp
+  | cons a xs => pmap (cons a) (++-assoc xs ys zs)
+
+-- Это утверждение будет полезно для доказательства.
+\func reverse++ {A : \Type}
+                (xs ys : List A)
+  : reverse (xs ++ ys) = reverse ys ++ reverse xs \elim xs
+  | nil => sym (nil-neutral (reverse ys))
+  | cons a xs =>
+    reverse (xs ++ ys) ++ cons a nil ==< pmap (`++ cons a nil) (reverse++ xs ys) >==
+    (reverse ys ++ reverse xs) ++ cons a nil ==< ++-assoc (reverse ys) (reverse xs) (cons a nil) >==
+    reverse ys ++ reverse (cons a xs) `qed
+
+\func reverse-isInvolutive {A : \Type} (xs : List A) : reverse (reverse xs) = xs \elim xs
+  | nil => idp
+  | cons a xs =>
+    reverse (reverse xs ++ cons a nil) ==< reverse++ (reverse xs) (cons a nil) >==
+    cons a (reverse (reverse xs)) ==< pmap (cons a) (reverse-isInvolutive xs) >==
+    cons a xs `qed
 
 -- 4. Докажите дистрибутивность умножения над сложением для натуральных чисел.
 
-\func ldistr (n m k : Nat) : n * (m + k) = n * m + n * k => {?}
+\func mul-zero (n : Nat) : 0 * n = 0 \elim n
+  | 0 => idp
+  | suc n => mul-zero n
 
-\func rdistr (n m k : Nat) : (m + k) * n = m * n + k * n => {?}
+\func ldistr (n m k : Nat) : n * (m + k) = n * m + n * k \elim k
+  | 0 => idp
+  | suc k =>
+    n * (m + k) + n ==< pmap (`+ n) (ldistr n m k) >==
+    (n * m + n * k) + n ==< +-assoc (n * m) (n * k) n >==
+    n * m + ((n * k) + n) `qed
+
+\func rdistr (n m k : Nat) : (m + k) * n = m * n + k * n \elim n
+  | 0 => idp
+  | suc n =>
+    (m + k) * n + (m + k) ==< pmap (`+ (m + k)) (rdistr n m k) >==
+    m * n + k * n + (m + k) ==< +-assoc (m * n) (k * n) (m + k) >==
+    m * n + (k * n + (m + k)) ==< pmap (m * n `+) (+-comm (k * n) (m + k)) >==
+    m * n + ((m + k) + k * n) ==< pmap (m * n `+) (+-assoc m k (k * n)) >==
+    m * n + (m + (k + k * n)) ==< sym (+-assoc (m * n) m (k + (k * n))) >==
+    (m * n + m) + (k + k * n) ==< pmap (m * n + m `+) (+-comm k (k * n)) >==
+    (m * n + m) + (k * n + k) `qed
 
 -- 5. Докажите, что (\lam x => not (not x)) = (\lam x => x).
 
@@ -46,11 +101,33 @@
   | true => false
   | false => true
 
-\func notNotId : (\lam x => not (not x)) = (\lam x => x) => {?}
+\func notNotId : (\lam x => not (not x)) = (\lam x => x) => funExt (const Bool) case
+  \where {
+    \func const {A B : \Type} (a : A) (_ : B) : A => a
+    \func case (x : Bool) : not (not x) = x \elim x
+      | true => idp
+      | false => idp
+  }
 
 -- 6. Определите факториал через Nat-rec.
 
+\func fac' (n : Nat) : Nat => Nat-rec Nat 1 (\lam x y => (suc x) * y) n
+
+\func fac'-test1 : fac' 0 = 1 => idp
+\func fac'-test2 : fac' 1 = 1 => idp
+\func fac'-test3 : fac' 2 = 2 => idp
+\func fac'-test4 : fac' 3 = 6 => idp
+\func fac'-test5 : fac' 6 = 720 => idp
+
 -- 7. Докажите ассоциативность сложения для натуральных чисел через Nat-elim.
+
+\func +-assoc' (n m k : Nat) : (n + m) + k = n + (m + k)
+    => Nat-elim (P n m) (z n m) (s n m) k
+  \where {
+    \func P (n m k : Nat) : \Type => (n + m) + k = n + (m + k)
+    \func z (n m : Nat) : P n m 0 => idp
+    \func s (n m k : Nat) (p : P n m k) : P n m (suc k) => pmap suc p
+  }
 
 -- 8. Определите рекурсор и элиминатор для D.
 
@@ -59,11 +136,54 @@
   | con2 D D
   | con3 (Nat -> D)
 
+\func D-elim (P : D -> \Type)
+             (c1 : \Pi (n : Nat) -> P (con1 n))
+             (c2 : \Pi (d1 d2 : D) -> P d1 -> P d2 -> P (con2 d1 d2))
+             (c3 : \Pi (f : Nat -> D) -> P (con3 f))
+             (d : D) : P d
+  \elim d
+  | con1 n => c1 n
+  | con2 d1 d2 => c2 d1 d2 (D-elim P c1 c2 c3 d1) (D-elim P c1 c2 c3 d2)
+  | con3 f => c3 f
+
+\func D-rec (P : \Type)
+            (c1 : Nat -> P)
+            (c2 : P -> P -> P)
+            (c3 : (Nat -> D) -> P)
+            (x : D) : P
+  \elim x
+  | con1 n => c1 n
+  | con2 d1 d2 => c2 (D-rec P c1 c2 c3 d1) (D-rec P c1 c2 c3 d2)
+  | con3 f => c3 f
+
+
 -- 9. Определите рекурсор и элиминатор для List.
+
+\func List-elim {A : \Type} (P : List A -> \Type)
+                            (n : P nil)
+                            (c : \Pi (a : A) (l : List A) -> P l -> P (cons a l))
+                            (l : List A) : P l
+  \elim l
+  | nil => n
+  | cons a l => c a l (List-elim P n c l)
+
+\func List-rec {A : \Type} (P : \Type)
+                           (n : P)
+                           (c : A -> List A -> P -> P)
+                           (l : List A) : P
+  \elim l
+  | nil => n
+  | cons a l => c a l (List-rec P n c l)
 
 -- 10. Докажите, что 0 не равно suc x.
 
-\func zero/=suc (x : Nat) (p : 0 = suc x) : Empty => {?}
+\func zero/=suc (x : Nat) (p : 0 = suc x) : Empty
+    => transport (\lam x => T (isZero x)) p ()
+  \where {
+    \func isZero (n : Nat) : Bool \elim n
+      | 0 => true
+      | _ => false
+  }
 
 -- 11. Докажите, что fac не равен suc.
 
@@ -73,40 +193,78 @@
   | 0 => 1
   | suc n => suc n * fac n
 
-\func fac/=suc (p : fac = suc) : Empty => {?}
+\func fac/=suc (p : fac = suc) : Empty
+    => transport (\lam f => T (isOne (f 1))) p ()
+  \where {
+    \func isOne (n : Nat) : Bool \elim n
+      | 1 => true
+      | _ => false
+  }
 
 -- 12. Докажите, что left = right, не используя transport, coe и паттерн матчинг с idp.
 
-\func left=right : left = right => {?}
+\func left=right : left = right => path (\lam i => i)
 
 -- 13. Докажите, что если a = a' и b = b', то (a,b) = (a',b'), не используя transport, coe и паттерн матчинг с idp.
 
-\func pairEq {A B : \Type} {a a' : A} {b b' : B} (p : a = a') (q : b = b') : (a,b) = (a',b') => {?}
+\func pairEq {A B : \Type}
+             {a a' : A}
+             {b b' : B}
+             (p : a = a')
+             (q : b = b')
+  : (a,b) = (a',b') => path (\lam i => (p @ i, q @ i))
 
 -- 14. Докажите, что если p = p', то p.1 = p'.1, не используя transport, coe и паттерн матчинг с idp.
 
-\func projEq {A : \Type} (B : A -> \Type) {p p' : \Sigma (x : A) (B x)} (t : p = p') : p.1 = p'.1 => {?}
+\func projEq {A : \Type}
+             (B : A -> \Type)
+             {p p' : \Sigma (x : A) (B x)}
+             (t : p = p')
+  : p.1 = p'.1
+  => path (\lam i => (t @ i).1)
+--  => pmap (\lam pp => pp.1) t -- Но мб pmap определён через что-то запрещённое?
 
 -- 15. Докажите pmap2, не используя transport, coe и паттерн матчинг с idp.
 
-\func pmap2' {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b' => {?}
+\func pmap2' {A B C : \Type}
+             (f : A -> B -> C)
+             {a a' : A}
+             (p : a = a')
+             {b b' : B}
+             (q : b = b')
+  : f a b = f a' b' => path (\lam i => f (p @ i) (q @ i))
 
 -- 16. Мы видели как определить transport через coe. Определите частный случай coe через transport.
 --     Можно ли определить transport через coe0?
 
-\func coe0 (A : I -> \Type) (a : A left) : A right => {?}
+\func coe0 (A : I -> \Type)
+           (a : A left)
+  : A right => transport A left=right a
+
+-- Ну вроде ровно то же самое тайпчекается
+\func transport''' {A : \Type}
+                   (B : A -> \Type)
+                   {a a' : A}
+                   (p : a = a')
+                   (b : B a)
+  : B a' => coe0 (\lam i => B (p @ i)) b
 
 -- 17. Определите функцию B right -> B left.
 
-\func Itr' {B : I -> \Type} (b : B right) : B left => {?}
+\func Itr' {B : I -> \Type}
+           (b : B right)
+  : B left => transport B (sym left=right) b
 
 -- 18. У оператора J есть другая форма, которую мы будем называть Jalt. Докажите, что J и Jalt эквивалентны, то есть выразите одно через другое и наоборот.
 
 -- Выразите Jalt через J. Можно пользоваться только J, idp и всем, что через них выражается.
 
-\func Jalt {A : \Type} (B : \Pi (a a' : A) -> a = a' -> \Type)
+\func Jalt {A : \Type}
+           (B : \Pi (a a' : A) -> a = a' -> \Type)
            (b : \Pi (a : A) -> B a a idp)
-           {a a' : A} (p : a = a') : B a a' p => {?}
+           {a a' : A}
+           (p : a = a')
+  : B a a' p => J (B a) (b a) p
 
 -- Выразите J через Jalt. Можно пользоваться только Jalt, idp и всем, что через них выражается.
 -- Hint:
@@ -114,10 +272,25 @@
 -- 2. Докажите, что тип \Sigma (x : A) (a = x) одноэлементный, то есть, что для любого p : \Sigma (x : A) (a = x) верно, что (x,idp) = p.
 -- 3. Используя эти две конструкции, легко определить J.
 
-\func transport'' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a' => {?}
+\func transport'' {A : \Type}
+                  (B : A -> \Type)
+                  {a a' : A}
+                  (p : a = a')
+                  (b : B a)
+  : B a' => (Jalt (\lam a a' p => B a -> B a') (\lam a x => x) p) b
 
-\func sigma-contr {A : \Type} {a : A} (p : \Sigma (x : A) (a = x)) : (a,idp) = {\Sigma (x : A) (a = x)} p => {?}
+\func sigma-contr {A : \Type}
+                  {a : A}
+                  (p : \Sigma (x : A) (a = x))
+  : (a,idp) = {\Sigma (x : A) (a = x)} p
+  => Jalt (\lam a a' p => (a, idp) = {\Sigma (x : A) (a = x)} (a', p))
+          (\lam a => idp)
+          p.2
 
-\func J' {A : \Type} {a : A} (B : \Pi (a' : A) -> a = a' -> \Type)
+\func J' {A : \Type}
+         {a : A}
+         (B : \Pi (a' : A) -> a = a' -> \Type)
          (b : B a idp)
-         {a' : A} (p : a = a') : B a' p => {?}
+         {a' : A}
+         (p : a = a')
+  : B a' p => transport'' (\lam q => B q.1 q.2) (sigma-contr (a',p)) b
