@@ -154,6 +154,7 @@
   | con2 D D
   | con3 (Nat -> D)
 
+-- c3 тоже должно принимать результат рекурсивного вызова.
 \func D-elim (P : D -> \Type)
              (c1 : \Pi (n : Nat) -> P (con1 n))
              (c2 : \Pi (d1 d2 : D) -> P d1 -> P d2 -> P (con2 d1 d2))
