@@ -1,94 +1,708 @@
 \import Utils
-\import lect06 (Decide)
+\import hw02 (gcd)
+\import hw05 (pmap2)
+\import lect05 (funExt)
+\import lect06 (Decide, no, yes)
 \import lect07
 
 -- 1. Определите функцию swap несколькими способами.
 
 -- При помощи \cowith и доступа к полям.
-\func swap {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap {A B : \Type} (p : Pair A B) : Pair B A \cowith
+  | fst_ => p.snd_
+  | snd_ => p.fst_
 
 -- При помощи \new и паттерн матчинга.
-\func swap' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap' {A B : \Type} (p : Pair A B) : Pair B A
+  | (a,b) => \new Pair {| fst_ => b | snd_ => a}
 
 -- При помощи \new и доступа к полям.
-\func swap'' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap'' {A B : \Type} (p : Pair A B) : Pair B A
+  => \new Pair {| fst_ => snd_ {p} | snd_ => fst_ {p}}
 
 -- 2. Докажите, что swap (swap p) = p.
 
-\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p => {?}
+\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p => idp
 
 -- 3. Докажите, что тип PosNat 0 пустой, а тип PosNat 1 нет.
 
-\func zero-isNotPos (p : PosNat 0) : Empty => {?}
+\func zero-isNotPos (p : PosNat 0) : Empty => p.p
 
-\func one-isPos : PosNat 1 => {?}
+\func one-isPos : PosNat 1 => \new PosNat 1 ()
 
 -- 4. Определите \record, состоящий из пар взаимно простых натуральных чисел.
 --    Определите тип, состоящий из натуральных чисел, взаимно простых с 60.
 
+\func coprime (n m : Nat) : Bool => \case gcd n m \with {
+  | 1 => true
+  | _ => false
+}
+
+\record Coprime (n m : Nat) (p : T(coprime n m))
+
+\func coprimeTest1 => \new Coprime 12 37 ()
+-- \func coprimeTest2 => \new Coprime 12 16 ()
+
+\func CoprimeWith60 : \Type => Coprime {| n => 60}
+
 -- 5. Докажите, что если равенство элементов A разрешимо, то и равенство элементов List A тоже разрешимо.
 
-\instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
-  | decideEq => {?}
+\instance ListEq {A : \Type} (dec : Eq A) : Eq (List A) {
+  | decideEq xs ys => impl dec xs ys
+  } \where {
+    \func impl {A : \Type} (dec : Eq A) (xs ys : List A) : Decide (xs = ys) \elim xs, ys
+      | nil, nil => yes idp
+      | nil, cons a l => no nil/=cons
+      | cons a l, nil => no (\lam p => nil/=cons (sym p))
+      | cons a l, cons a' l' => \case dec.decideEq a a', impl dec l l' \with {
+        | yes ya, yes yl => yes (transport (\lam b => cons b l = cons a' l') (sym ya) (pmap (cons a') yl))
+        | no n, _ => no (\lam p => n (headEq p))
+        | _, no n => no (\lam p => n (pmap uncons p))
+      }
+
+    \func isNil {A : \Type} (l : List A) : Bool
+      | nil => true
+      | _   => false
+
+    \func safeHead {A : \Type} (onNil : A) (l : List A) : A \elim l
+      | nil      => onNil
+      | cons a l => a
+
+    \func headEq {A : \Type} {a a' : A} {l l' : List A} (p : cons a l = cons a' l') : a = a'
+      => pmap (safeHead a) p
+
+    \func nil/=cons {A : \Type} {a : A} {l : List A} (p : nil = cons a l) : Empty
+        => transport (\lam l => T (isNil l)) p ()
+
+    \func uncons {A : \Type} (l : List A) : List A
+      | nil => nil
+      | cons a l => l
+}
 
 -- 6. Закончите определение класса монад. Этот класс должен содержать все монадные законы и реализовывать все поля из класса функторов.
 
 \class Monad \extends Functor
   | return {A : \Type} : A -> F A
   | \infixl 1 >>= {A B : \Type} : F A -> (A -> F B) -> F B
+  | bind-return-left {A B : \Type} (a : A) (k : A -> F B) : (return a >>= k) = k a
+  | bind-return-right {A : \Type} (m : F A) : (m >>= return) = m
+  | bind-assoc {A B C : \Type} (m : F A) (k : A -> F B) (h : B -> F C)
+    : (m >>= (\lam x => k x >>= h)) = ((m >>= k) >>= h)
+  | fmap f x => x >>= (\lam y => return (f y))
+  | fmap-id y => bind-return-right y
+  | fmap-comp {_} {_} {C} f g y =>
+      fmap (\lam x => g (f x)) y ==< idp >==
+      (y >>= (\lam x => return (g (f x)))) ==< pmap (y >>=) (funExt (\lam _ => F C) (\lam x => sym (bind-return-left (f x) (\lam x => return (g x))))) >==
+      (y >>= (\lam x => return (f x) >>= (\lam x => return (g x)))) ==< bind-assoc y (\lam x => return (f x)) (\lam x => return (g x)) >==
+      ((y >>= (\lam x => return (f x))) >>= (\lam x => return (g x))) ==< idp >==
+      fmap g (fmap f y) `qed
 
 -- 7. Определите \instance Monad для Maybe.
 
-\instance MaybeMonad : Monad Maybe => {?}
+\instance MaybeMonad : Monad Maybe
+  | return => just
+  | \infixl 1 >>= {A B : \Type} (a : Maybe A) (f : A -> Maybe B) : Maybe B \elim a {
+    | nothing => nothing
+    | just a  => f a
+  }
+  | bind-return-left {A B : \Type} (a : A) (k : A -> Maybe B) : (just a >>= k) = k a \elim a {
+    | _ => idp
+  }
+  | bind-return-right {A : \Type} (m : Maybe A) : (m >>= just) = m \elim m {
+    | nothing => idp
+    | just a  => idp
+  }
+  | bind-assoc {A B C : \Type} (m : Maybe A) (k : A -> Maybe B) (h : B -> Maybe C)
+    : (m >>= (\lam x => k x >>= h)) = ((m >>= k) >>= h) \elim m {
+    | nothing => idp
+    | just a  => idp
+  }
 
 -- 8. Определите \instance Monad для State и State'.
 
 \record State (S A : \Type)
   | state : S -> \Sigma S A
 
+\instance StateMonad (S : \Type) : Monad (\lam A => State S A)
+  | return x => \new State {| state => \lam s => (s, x)}
+  | >>= a f => \new State {
+    | state => \lam s => \let
+      | (s', a') => state {a} s
+      \in state {f a'} s'
+  }
+  | bind-return-left a k => idp
+  | bind-return-right a => idp
+  | bind-assoc m k h => idp
+
 \data State' (S A : \Type)
   | state' (S -> \Sigma S A)
 
+\func runState' {S A : \Type} (s : State' S A) : (S -> \Sigma S A)
+  | state' f => f
+
+\instance State'Monad (S : \Type) : Monad (\lam A => State' S A)
+  | return x => state' (\lam s => (s, x))
+  | >>= a f => state' (\lam s => \let
+    | (s', a') => runState' a s
+    \in runState' (f a') s'
+  )
+  | bind-return-left => left-impl {S}
+  | bind-return-right => right-impl {S}
+  | bind-assoc m k h => idp
+  \where {
+    \func left-impl {S A B : \Type} (a : A) (k : A -> State' S B)
+      : state' (runState' (k a)) = k a
+      => right-impl (k a)
+    \func right-impl {S A : \Type} (m : State' S A)
+      : state' (runState' m) = m \elim m
+      | state' f => idp
+  }
+
 -- 9. Определите \instance Monad для Term.
 
+\func isJust {A : \Type} (m : Maybe A) : Bool
+  | nothing => false
+  | just a  => true
+\func fromMaybe {A : \Type} (a : A) (m : Maybe A) : A \elim m
+  | nothing => a
+  | just b  => b
+\func justEq {A : \Type} {a b : A} (p : just a = just b) : a = b
+  => pmap (fromMaybe a) p
+
+-- Бл*н три дня убил...
 \instance TermMonad : Monad Term
-  | fmap => {?}
-  | fmap-id => {?}
-  | fmap-comp => {?}
-  | return => {?}
-  | >>= => {?}
+  | return => var
+  | \infixl 1 >>= {A B : \Type} (a : Term A) (f : A -> Term B) : Term B \elim a {
+    | var v => f v
+    | unit => unit
+    | app t t1 => app (t >>= f) (t1 >>= f)
+    | lam t => lam (t >>= maybe (var nothing) (\lam x => shift (f x)))
+  }
+  | bind-return-left a k => idp
+  | bind-return-right => rimpl
+  | bind-assoc => aimpl
+  \where {
+    \func fmap' {A B : \Type} (f : A -> B) (t : Term A) : Term B \elim t
+      | var v   => var (f v)
+      | unit    => unit
+      | app p q => app (fmap' f p) (fmap' f q)
+      | lam t   => lam (fmap' (fmap f) t)
+    \func fmap'-comp {A B C : \Type} (f : A -> B) (g : B -> C) (y : Term A)
+      : fmap' (\lam x => g (f x)) y = fmap' g (fmap' f y)
+      \elim y
+        | var v   => idp
+        | unit    => idp
+        | app p q => pmap2 app (fmap'-comp f g p) (fmap'-comp f g q)
+        | lam t   =>
+          fmap' (\lam x => g (f x)) (lam t) ==< idp >==
+          lam (fmap' (fmap (\lam x => g (f x))) t) ==< idp >==
+          lam (fmap' (\lam y => fmap (\lam x => g (f x)) y) t) ==< pmap (\lam f => lam (fmap' f t)) (funExt (\lam _ => Maybe C) (fmap-comp f g)) >==
+          lam (fmap' (\lam y => fmap g (fmap f y)) t) ==< pmap lam (fmap'-comp (fmap f) (fmap g) t) >==
+          lam (fmap' (fmap g) (fmap' (fmap f) t)) ==< idp >==
+          fmap' g (lam (fmap' (fmap f) t)) ==< idp >==
+          fmap' g (fmap' f (lam t)) `qed
+    \func shift {A : \Type} (t : Term A) : Term (Maybe A) => fmap' just t
+    \func maybeShift {A : \Type}
+      : maybe {A} (var nothing) (\lam x => shift (var x)) = var
+      => funExt (\lam _ => Term (Maybe A)) argEq
+      \where {
+        \func argEq {A : \Type} (m : Maybe A) : maybe (var nothing) (\lam x => shift (var x)) m = var m
+          | nothing => idp
+          | just a => idp
+      }
+    \func rimpl {A : \Type} (t : Term A) : (t >>= var) = t
+      | var v   => idp
+      | unit    => idp
+      | app p q => pmap2 app (rimpl p) (rimpl q)
+      | lam t   => pmap lam (pmap (t >>=) maybeShift *> rimpl t)
+    \func lemma {A B C : \Type} (k : A -> Term B) (h : B -> Term C)
+      : maybe (var nothing) (\lam y => shift (k y >>= h))
+      = (\lam x => maybe (var nothing) (\lam y => shift (k y)) x >>= maybe (var nothing) (\lam x => shift (h x)))
+      => funExt (\lam _ => Term (Maybe C)) (argEq k h)
+      \where {
+        \func argEq {A B C : \Type} (k : A -> Term B) (h : B -> Term C) (m : Maybe A)
+          : maybe (var nothing) (\lam y => shift (k y >>= h)) m
+          = (maybe (var nothing) (\lam y => shift (k y)) m >>= maybe (var nothing) (\lam x => shift (h x)))
+          \elim m
+            | nothing => idp
+            | just a  => fmap*prop 0 h (isGood h) (k a)
+        \func MaybeTower (n : Nat) (A : \Type) : \Type \elim n
+          | 0     => A
+          | suc n => Maybe (MaybeTower n A)
+        \func fmap*just (n : Nat) {A : \Type} : MaybeTower n A -> MaybeTower (suc n) A
+          | 0     => just
+          | suc n => fmap (fmap*just n)
+        \func fmap1 : fmap*just 1 {Nat} nothing         = nothing => idp
+        \func fmap2 : fmap*just 1 {Nat} (just 1)        = just (just 1) => idp
+        \func fmap3 : fmap*just 2 {Nat} nothing         = nothing => idp
+        \func fmap4 : fmap*just 2 {Nat} (just nothing)  = just nothing => idp
+        \func fmap5 : fmap*just 2 {Nat} (just (just 1)) = just (just (just 1)) => idp
+        \func allJusts {A : \Type} {n : Nat} (v : MaybeTower n A) : Bool \elim n, v
+          | 0,     v       => true
+          | suc n, nothing => false
+          | suc n, just a  => allJusts a
+        \func lift {A : \Type} {n : Nat} (v : MaybeTower n A) (e : allJusts v = false) : MaybeTower (suc n) A
+          \elim n, v
+            | 0,     v       => absurd (transport T e ())
+            | suc n, nothing => nothing
+            | suc n, just a  => just (lift a e)
+        \func fmap*just-lift {A : \Type} {n : Nat} {v : MaybeTower n A} (e : allJusts v = false)
+          : fmap*just n v = lift v e
+          \elim n, v
+            | 0, v           => absurd (transport T e ())
+            | suc n, nothing => idp
+            | suc n, just a  => pmap just (fmap*just-lift e)
+        \func fmap*just-just {A : \Type} {n : Nat} {v : MaybeTower n A} (e : allJusts v = true)
+          : fmap*just n v = just v
+        \elim n, v
+          | 0, v           => idp
+          | suc n, nothing => absurd (transport T (sym e) ())
+          | suc n, just a  => pmap just (fmap*just-just e)
+        \func fmap-just-fmap*just (n : Nat) (A : \Type)
+          : (\lam x => fmap just (fmap*just (suc n) {A} x)) = (\lam x => fmap*just (suc (suc n)) (fmap just x))
+          => funExt (\lam _ => MaybeTower (suc (suc (suc n))) A) (argEq' n A)
+        \where {
+          \func argEq' (n : Nat) (A : \Type) (v : MaybeTower (suc n) A)
+            : fmap just (fmap*just (suc n) {A} v) = fmap*just (suc (suc n)) (fmap just v)
+          \elim v
+            | nothing => idp
+            | just a  => idp
+        }
+        \func IsGood {A B : \Type}
+                     (n : Nat)
+                     (h : MaybeTower n A -> Term (MaybeTower n B))
+          : \Type
+          => \Sigma (\Pi {v : MaybeTower n A}
+                      -> (allJusts v = true)
+                      -> fmap' (fmap*just n) (h v) = shift (h v))
+                    (\Pi {v : MaybeTower n A}
+                      -> \Pi (e : allJusts v = false)
+                      -> fmap' (fmap*just n) (h v) = maybe (var nothing) (\lam x => shift (h x)) (lift v e))
+        \func isGood {A B : \Type} (h : A -> Term B) : IsGood {A} {B} 0 h
+          => (
+            \lam _ => idp,
+            \lam e => absurd (transport T e ())
+          )
+        \func shift-fmap*just {A : \Type} (n : Nat) (a : Term (MaybeTower n A))
+          : fmap' (fmap*just (suc n)) (shift a) = shift (fmap' (fmap*just n) a) \elim a
+          | var v   => idp
+          | unit    => idp
+          | app p q => pmap2 app (shift-fmap*just n p) (shift-fmap*just n q)
+          | lam t   =>
+            fmap' (fmap*just (suc n)) (shift (lam t)) ==< idp >==
+            fmap' (fmap*just (suc n)) (lam (fmap' (fmap just) t)) ==< idp >==
+            lam (fmap' (fmap*just (suc (suc n))) (fmap' (fmap just) t)) ==< pmap lam (sym (fmap'-comp (fmap just) (fmap*just (suc (suc n))) t)) >==
+            lam (fmap' (\lam x => fmap*just (suc (suc n)) (fmap just x)) t) ==< pmap (\lam f => lam (fmap' f t)) (sym (fmap-just-fmap*just n A)) >==
+            lam (fmap' (\lam x => fmap just (fmap*just (suc n) x)) t) ==< pmap lam (fmap'-comp (fmap (fmap*just n)) (fmap just) t) >==
+            lam (fmap' (fmap just) (fmap' (fmap*just (suc n)) t)) ==< idp >==
+            shift (lam (fmap' (fmap (fmap*just n)) t)) ==< idp >==
+            shift (fmap' (fmap*just n) (lam t)) `qed
+        \func liftIsGood {A B : \Type} {n : Nat}
+                         (h : MaybeTower n A -> Term (MaybeTower n B))
+                         (hp : IsGood n h)
+          : IsGood (suc n) (maybe (var nothing) (\lam x => shift (h x)))
+          => (fstImpl h hp, sndImpl h hp) \where {
+            \func fstImpl {A B : \Type} {n : Nat}
+                          (h : MaybeTower n A -> Term (MaybeTower n B))
+                          (hp : IsGood n h)
+                          {v : MaybeTower (suc n) A}
+                          (e : allJusts {A} {suc n} v = true)
+               : fmap' (fmap*just (suc n)) (maybe (var nothing) (\lam x => shift (h x)) v)
+               = shift (maybe (var nothing) (\lam x => shift (h x)) v)
+            \elim v
+              | nothing => absurd (transport T (sym e) ())
+              | just a  => shift-fmap*just n (h a) *> pmap shift (hp.1 e)
+          \func sndImpl {A B : \Type} {n : Nat}
+                          (h : MaybeTower n A -> Term (MaybeTower n B))
+                          (hp : IsGood n h)
+                          {v : MaybeTower (suc n) A}
+                          (e : allJusts {A} {suc n} v = false)
+               : fmap' (fmap*just (suc n)) (maybe (var nothing) (\lam x => shift (h x)) v)
+               = maybe (var nothing) (\lam x => shift (maybe (var nothing) (\lam y => shift (h y)) x)) (lift v e)
+            \elim v
+              | nothing => idp
+              | just a  => shift-fmap*just n (h a) *> pmap shift (hp.2 e)
+        }
+        \func fmap*prop {B C : \Type}
+                        (n  : Nat)
+                        (h  : MaybeTower n B -> Term (MaybeTower n C))
+                        (hp : IsGood n h)
+                        (b  : Term (MaybeTower n B))
+          : fmap' (fmap*just n) (b >>= h) = (fmap' (fmap*just n) b >>= maybe (var nothing) (\lam x => shift (h x)))
+          \elim b
+            | var v   => \case allJusts v \as bb, idp : allJusts v = bb \with {
+              | true,  e =>
+                fmap' (fmap*just n) (h v) ==< hp.1 e >==
+                shift (h v) ==< pmap (maybe (var nothing) (\lam x => shift (h x))) (sym (fmap*just-just e)) >==
+                maybe (var nothing) (\lam x => shift (h x)) (fmap*just n v) `qed
+              | false, e =>
+                fmap' (fmap*just n) (h v) ==< hp.2 e >==
+                maybe (var nothing) (\lam x => shift (h x)) (lift v e) ==< pmap (maybe (var nothing) (\lam x => shift (h x))) (sym (fmap*just-lift e)) >==
+                maybe (var nothing) (\lam x => shift (h x)) (fmap*just n v) `qed
+            }
+            | unit    => idp
+            | app p q => pmap2 app (fmap*prop n h hp p) (fmap*prop n h hp q)
+            | lam t   => pmap lam (fmap*prop (suc n) (maybe (var nothing) (\lam x => shift (h x))) (liftIsGood h hp) t)
+      }
+    \func aimpl {A B C : \Type} (t : Term A) (k : A -> Term B) (h : B -> Term C)
+      : (t >>= (\lam x => k x >>= h)) = ((t >>= k) >>= h) \elim t
+      | var v   => idp
+      | unit    => idp
+      | app p q => pmap2 app (aimpl p k h) (aimpl q k h)
+      | lam t   =>
+        (lam t >>= (\lam x => k x >>= h)) ==< idp >==
+        (lam (t >>= maybe (var nothing) (\lam y => shift (k y >>= h)))) ==< pmap (\lam x => lam (t >>= x)) (lemma k h) >==
+        (lam (t >>= (\lam x => maybe (var nothing) (\lam y => shift (k y)) x >>= maybe (var nothing) (\lam x => shift (h x))))) ==< pmap lam (aimpl t _ _) >==
+        (lam ((t >>= maybe (var nothing) (\lam x => shift (k x))) >>= maybe (var nothing) (\lam x => shift (h x)))) ==< idp >==
+        ((lam (t >>= maybe (var nothing) (\lam x => shift (k x)))) >>= h) ==< idp >==
+        ((lam t >>= k) >>= h) `qed
+  }
+
+\func application : Term Nat
+  => app (var 0) (var 1)
+\func omega : Term Nat
+  => lam (app (var nothing) (var nothing))
+\func Omega : Term Nat
+  => app omega omega
+\func bindTest1 : (application >>= (\lam _ => omega)) = Omega => idp
+
+\func lamApplication : Term Nat
+  => lam (app (var (just 0)) (var (just 1)))
+\func lamOmega : Term Nat
+  => lam (app (lam (app (var nothing) (var nothing)))
+              (lam (app (var nothing) (var nothing))))
+\func bindTest2 : (lamApplication >>= (\lam _ => omega)) = lamOmega => idp
+
+\func lamLamApplication : Term Nat
+  => lam (lam (app (var (just (just 0))) (var (just (just 1)))))
+\func lamLamOmega : Term Nat
+  => lam (lam (app (lam (app (var nothing) (var nothing)))
+                   (lam (app (var nothing) (var nothing)))))
+\func bindTest3 : (lamLamApplication >>= (\lam _ => omega)) = lamLamOmega => idp
+
+\func someTestL : Term Nat
+  => lam (app (var (just 0)) (var nothing))
+\func someTestR : Term Nat
+  => app (var 1) (var 2)
+\func someTestE : Term Nat
+  => lam (app (app (var (just 1)) (var (just 2))) (var nothing))
+\func bindTest4 : (someTestL >>= (\lam _ => someTestR)) = someTestE => idp
+
+\func someTestB : Term Nat
+  => lam (app (var (just 1)) (var (just 1)))
+\func someTestBE : Term Nat
+  => lam (app (lam (app (var (just (just 0))) (var nothing))) (lam (app (var (just (just 0))) (var nothing))))
+\func bindTest5 : (someTestB >>= (\lam _ => someTestL)) = someTestBE => idp
 
 -- 10. Определите отношение многошаговой редукции на Term.
 
-\func Red {V : \Type} (t s : Term V) : \Type => {?}
+\data Red {V : \Type} (t s : Term V)
+  | EqRed (t = s)
+  | StepRed (w : Term V) (Red1 t w) (Red w s)
 
 -- 11. Стратегия редукции -- это функция, которая каждому терму сопоставляет либо некоторый терм, к которому он редуцируется за 1 шаг, либо доказательство, что таких термов нет.
 --     Определите любую стратегию редукции.
 
-\func strategy {V : \Type} (t : Term V) : Decide (\Sigma (s : Term V) (Red1 t s)) => {?}
+-- Normal order
+-- P.S. А можно как-нибудь без боли termination check пройти? Очень хотелось app p q вынести отдельно, тогда было бы
+--      гораздо короче, без case по idp как минимум. Но termination check с этим не справляется.
+\func strategy {V : \Type} (t : Term V)
+  : Decide (\Sigma (s : Term V) (Red1 t s))
+  | var v => no (\lam s => varIrreducible v s.1 s.2)
+  | unit => no (\lam s => unitIrreducible s.1 s.2)
+  | app p q => \case p \as pp, idp : pp = p \with {
+    | lam t, e => yes (t >>= maybe q var, beta t e idp)
+    | app t s, e => \case strategy p \with {
+      | yes (r, pr) => yes (app r q, appLeft pr idp)
+      | no np => \case strategy q \with {
+        | yes (r, pr) => yes (app p r, appRight idp pr)
+        | no nq => no (\lam ss =>
+          appIrreducible p q np nq
+                         (transport (\lam u => T (not (isLam u))) e ())
+                         ss.1 ss.2)
+      }
+    }
+    | var v, e => \case strategy q \with {
+      | yes (r, pr) => yes (app p r, appRight idp pr)
+      | no nq => no (\lam ss =>
+        appIrreducible (var v) q
+                       (\lam ss' => varIrreducible v ss'.1 ss'.2)
+                       nq () ss.1
+                       (transport (\lam r => Red1 (app r q) ss.1) (sym e) ss.2)
+      )
+    }
+    | unit, e => \case strategy q \with {
+      | yes (r, pr) => yes (app p r, appRight idp pr)
+      | no nq => no (\lam ss =>
+        appIrreducible unit q
+                       (\lam ss' => unitIrreducible ss'.1 ss'.2)
+                       nq () ss.1
+                       (transport (\lam r => Red1 (app r q) ss.1) (sym e) ss.2)
+      )
+    }
+  }
+  | lam t => goLam t (strategy t)
+  \where {
+    -- Забавно, что этого достаточно. То есть логично, да, но я всё равно нахожу это забавным.
+    \func varIrreducible {V : \Type}
+                         (v : V)
+                         (s : Term V)
+                         (r : Red1 (var v) s)
+      : Empty \elim r
+
+    \func unitIrreducible {V : \Type}
+                          (s : Term V)
+                          (r : Red1 unit s)
+      : Empty \elim r
+
+    \func isLam {V : \Type} (p : Term V) : Bool
+      | lam _ => true
+      | _     => false
+
+    \func appIrreducible {V   : \Type}
+                         (p q : Term V)
+                         (pp  : (\Sigma (s : Term V) (Red1 p s)) -> Empty)
+                         (qp  : (\Sigma (s : Term V) (Red1 q s)) -> Empty)
+                         (pl  : T (not (isLam p)))
+                         (s   : Term V)
+                         (rr  : Red1 (app p q) s)
+      : Empty \elim s, rr
+      | app r _, appLeft pr _ => pp (r, pr)
+      | app _ r, appRight _ pr => qp (r, pr)
+      | _, beta _ e _ => transport (\lam t => T (not (isLam t))) (sym e) pl
+
+    \func lamIrreducible {V  : \Type}
+                         (t  : Term (Maybe V))
+                         (ir : (\Sigma (s : Term (Maybe V)) (Red1 t s)) -> Empty)
+                         (s  : Term V)
+                         (rr : Red1 (lam t) s)
+      : Empty \elim s, rr
+      | lam s, lamRed r => ir (s, r)
+
+    \func goLam {V : \Type}
+                (t : Term (Maybe V))
+                (rt : Decide (\Sigma (s' : Term (Maybe V)) (Red1 t s')))
+      : Decide (\Sigma (s : Term V) (Red1 (lam t) s)) \elim rt
+      | yes (s, rr) => yes (lam s, lamRed rr)
+      | no n => no (\lam ss => lamIrreducible t n ss.1 ss.2)
+  }
 
 -- 12. Докажите следующую обобщенную лемму о подстановке и выведите из нее обычную версию: если Г, x : A |- b : B и Г |- a : A, то Г |- b[a/x] : B.
 
-\func substLem {U V : \Type} (ctx : U -> Type) (b : Term U) (B : Type) (h : hasType ctx b B)
-               (ctx' : V -> Type) (a : U -> Term V) (h' : \Pi (u : U) -> hasType ctx' (a u) (ctx u))
-  : hasType ctx' (b >>= a) B
-  => {?}
+\func substLem {U V : \Type}
+               (ctx : U -> Type)
+               (b : Term U)
+               (B : Type)
+               (h : hasType ctx b B)
+               (ctx' : V -> Type)
+               (a : U -> Term V)
+               (h' : \Pi (u : U) -> hasType ctx' (a u) (ctx u))
+  : hasType ctx' (b >>= a) B \elim b, B, h
+  | var v,   _,       varType e       => transport (hasType ctx' (a v)) e (h' v)
+  | app f x, B,       appType {A} p q => appType (substLem ctx x A         p ctx' a h')
+                                                 (substLem ctx f (Arr A B) q ctx' a h')
+  | lam f,   Arr T S, lamType p       =>
+    \let
+    | ctx_  => maybe T ctx
+    | ctx'_ => maybe T ctx'
+    | a_    => maybe (var nothing) (\lam x => TermMonad.shift (a x))
+    | h'_   => h'-impl ctx ctx' a h' T
+    \in lamType (substLem {Maybe U} {Maybe V} ctx_ f S p ctx'_ a_ h'_)
+  \where {
+    \func h'-impl {U V : \Type}
+                  (ctx : U -> Type)
+                  (ctx' : V -> Type)
+                  (a : U -> Term V)
+                  (h' : \Pi (u : U) -> hasType ctx' (a u) (ctx u))
+                  (T : Type)
+                  (m : Maybe U)
+      : hasType (maybe T ctx')
+                (maybe (var nothing) (\lam x => TermMonad.shift (a x)) m)
+                (maybe T ctx m)
+      \elim m
+        | nothing => varType idp
+        | just u  => lemma 0 (a u) ctx' (\lam x => x) isGood-id T (ctx u) (h' u)
+    \func towerTrans {n : Nat} {A B : \Type}
+                      (m : TermMonad.lemma.MaybeTower n (Maybe A) -> B)
+      : TermMonad.lemma.MaybeTower (suc n) A -> B
+      => \lam x => m (transform x)
+    \where {
+      \func transform {n : Nat} {A : \Type}
+                      (m : TermMonad.lemma.MaybeTower (suc n) A)
+        : TermMonad.lemma.MaybeTower n (Maybe A) \elim n, m
+        | 0,     m       => m
+        | suc n, nothing => nothing
+        | suc n, just a  => just (transform a)
+    }
+    \func towerTransLemma {n : Nat} {A B : \Type} (C : B)
+                          (m : TermMonad.lemma.MaybeTower n (Maybe A) -> B)
+      : towerTrans {suc n} (maybe C m) = maybe C (towerTrans m)
+      => funExt (\lam _ => B) (argEq C m)
+    \where {
+      \func argEq {n : Nat} {A B : \Type} (C : B)
+                  (m : TermMonad.lemma.MaybeTower n (Maybe A) -> B)
+                  (x : TermMonad.lemma.MaybeTower (suc (suc n)) A)
+        : towerTrans {suc n} (maybe C m) x = maybe C (towerTrans m) x
+      \elim x
+        | nothing => idp
+        | just a  => idp
+    }
+    \func IsGood {n : Nat}
+                 (ctf : \Pi {V : \Type} -> (V -> Type) -> (TermMonad.lemma.MaybeTower n V -> Type))
+      : \Type
+      => \Pi {U : \Type}
+          -> \Pi {ctx : U -> Type}
+          -> \Pi {v : TermMonad.lemma.MaybeTower n U}
+          -> \Pi {T S : Type}
+          -> (ctf ctx v = S)
+          -> (ctf {Maybe U} (maybe T ctx) (towerTrans.transform (TermMonad.lemma.fmap*just n v)) = S)
+    \func isGood-id : IsGood {0} (\lam x => x)
+      => \lam e => e
+    \func lemma {U : \Type}
+                (n : Nat)
+                (t : Term (TermMonad.lemma.MaybeTower n U))
+                (ctx : U -> Type)
+                (ctf : \Pi {V : \Type} -> (V -> Type) -> (TermMonad.lemma.MaybeTower n V -> Type))
+                (ctfp : IsGood ctf)
+                (T S : Type)
+                (h : hasType (ctf ctx) t S)
+      : hasType (towerTrans (ctf {Maybe U} (maybe T ctx))) (TermMonad.fmap' (TermMonad.lemma.fmap*just n) t) S
+      \elim t, S, h
+        | var v,   _,       varType e       => varType (ctfp e)
+        | app f x, S,       appType {C} p q => appType (lemma n x ctx ctf ctfp T C         p)
+                                                       (lemma n f ctx ctf ctfp T (Arr C S) q)
+        | lam t,  Arr C S, lamType p       =>
+          \let
+          | ctf_   => ctf-impl n C ctf
+          | ctfp_  => lift-isGood n C ctf ctfp
+          | rec_   => lemma (suc n) t ctx ctf_ ctfp_ T S p
+          | trans_ => \lam T => hasType T (TermMonad.fmap' (TermMonad.lemma.fmap*just (suc n)) t) S
+          | lem_   => towerTransLemma {n} C (ctf {Maybe U} (maybe T ctx))
+          \in lamType (transport trans_ lem_ rec_)
+    \where {
+      \func ctf-impl (n : Nat)
+                     (C : Type)
+                     (ctf : \Pi {V : \Type} -> (V -> Type) -> TermMonad.lemma.MaybeTower n V -> Type)
+                     {V : \Type}
+                     (ctx : V -> Type)
+        : TermMonad.lemma.MaybeTower (suc n) V -> Type => maybe C (ctf ctx)
+      \func lift-isGood (n : Nat)
+                        (C : Type)
+                        (ctf : \Pi {V : \Type} -> (V -> Type) -> TermMonad.lemma.MaybeTower n V -> Type)
+                        (ctfp : IsGood ctf)
+                        {U : \Type}
+                        {ctx : U -> Type}
+                        {v : TermMonad.lemma.MaybeTower (suc n) U}
+                        {T S : Type}
+                        (e : ctf-impl n C ctf ctx v = S)
+        : maybe C (ctf {Maybe U} (maybe T ctx)) (towerTrans.transform {suc n} (TermMonad.lemma.fmap*just (suc n) v)) = S
+        \elim v
+          | nothing => e
+          | just _  => ctfp e
+    }
+  }
 
-\func substLem1 => {?}
+\func substLem1 {V : \Type}
+                (ctx : V -> Type)
+                (A B : Type)
+                (a : Term V)
+                (b : Term (Maybe V))
+                (hb : hasType (maybe A ctx) b B)
+                (ha : hasType ctx a A)
+  : hasType ctx (b >>= maybe a var) B
+  => substLem (maybe A ctx) b B hb ctx (maybe a var) (h' A a ctx ha)
+  \where {
+    \func h' {V : \Type} (A   : Type)
+                         (a   : Term V)
+                         (ctx : V -> Type)
+                         (ha  : hasType ctx a A)
+                         (v   : Maybe V)
+      : hasType ctx (maybe a var v) (maybe A ctx v)
+      \elim v
+        | nothing => ha
+        | just a  => varType idp
+  }
 
 -- 13. Докажите, что если Г |- a : A и Red a a', то Г |- a' : A
 
-\func redLem {V : \Type} {ctx : V -> Type} {a a' : Term V} (r : Red a a') {A : Type} (h : hasType ctx a A)
+\func redLem {V : \Type}
+             {ctx : V -> Type}
+             {a a' : Term V}
+             (r : Red a a')
+             {A : Type}
+             (h : hasType ctx a A)
   : hasType ctx a' A
-  => {?}
+  \elim r
+    | EqRed e       => transport (\lam a => hasType ctx a A) e h
+    | StepRed w r s => redLem s (oneStep r h)
+  \where {
+    \func oneStep {V : \Type}
+                  {ctx : V -> Type}
+                  {a a' : Term V}
+                  (r : Red1 a a')
+                  {A : Type}
+                  (h : hasType ctx a A)
+      : hasType ctx a' A
+      \elim a, a', r, A, h
+        | app t1 t2, app s1 s2, appLeft  r e, _,      appType {C} p q
+          => \let
+          | q' => oneStep r q
+          | p' => transport (\lam t => hasType ctx t C) e p
+          \in appType p' q'
+        | app t1 t2, app s1 s2, appRight e r, A,      appType {C} p q
+          => \let
+          | p' => oneStep r p
+          | q' => transport (\lam t => hasType ctx t (Arr C A)) e q
+          \in appType p' q'
+        | lam t,     lam s,     lamRed r,    Arr A B, lamType p
+          => lamType (oneStep r p)
+        | app t a,   _,         beta f e ea, A,       appType {C} p q
+          => \let
+          | ht => transport (\lam x => hasType ctx x (Arr C A)) (sym e) q
+          | hf => lemma ctx f ht
+          \in transport (\lam x => hasType ctx x A) ea (substLem1 ctx C A a f hf p)
+    \func lemma {V   : \Type}
+                (ctx : V -> Type)
+                {A C : Type}
+                (f   : Term (Maybe V))
+                (h   : hasType ctx (lam f) (Arr C A))
+      : hasType (maybe C ctx) f A \elim h
+        | lamType h => h
+  }
 
 -- 14. Закончите доказательство утверждения, что все типизируемые термы достижимы.
 
+\func appAccRight {V : \Type} {t s : Term V} (a : Acc Red1 (app t s)) : Acc Red1 s \elim a
+  | acc f => acc (\lam s' r => appAccRight (f (app t s') (appRight idp r)))
+
 -- Это более общее утверждение необходимо для усиления индукционной гипотезы.
 -- Для его доказательства потребуется вспомогательная лемма, которая говорит, что если термы a и b достижимы, и b[a/x] лежит в интерпретации B, то и (\x.b) a лежит в ней.
-\func typeableInterp {V : \Type} (ctx : V -> Type) (env : V -> Term V) (C : \Pi (v : V) -> Interp (ctx v) (env v)) (t : Term V) (T : Type) (p : hasType ctx t T)
-  : Interp T (t >>= env) => {?}
+\func typeableInterp {V : \Type}
+                     (ctx : V -> Type)
+                     (env : V -> Term V)
+                     (C : \Pi (v : V) -> Interp (ctx v) (env v))
+                     (t : Term V)
+                     (T : Type)
+                     (p : hasType ctx t T)
+  : Interp T (t >>= env) \elim t, T, p
+  | var v,   T,       varType e       => transport (\lam x => Interp x (env v)) e (C v)
+  | app f x, T,       appType {B} p q => \let
+    | recp => typeableInterp ctx env C x B         p
+    | recq => typeableInterp ctx env C f (Arr B T) q
+    \in recq (x >>= env) recp
+  | lam t,   Arr B T, lamType h       => \let
+    | ctx_  => maybe B ctx
+    | env_  => maybe (var nothing) (\lam x => TermMonad.shift (env x))
+    | C_    => ({?} : \Pi (v : Maybe V) -> Interp (ctx_ v) (env_ v))
+    | i_    => typeableInterp ctx_ env_ C_ t T h
+    \in \lam a r => ({?} : Interp T (app (lam (t >>= env_)) a))
 
 -- Это утверждение легко следует из предыдущего.
-\func typeableInterpId {V : \Type} (ctx : V -> Type) (t : Term V) (T : Type) (p : hasType ctx t T)
-  : Interp T t => {?}
+\func typeableInterpId {V : \Type}
+                       (ctx : V -> Type)
+                       (t : Term V)
+                       (T : Type)
+                       (p : hasType ctx t T)
+  : Interp T t => \let
+    | interp => (typeableInterp ctx var (\lam v => neutralInterp (ctx v) varNeutral) t T p)
+    \in transport (Interp T) (bind-return-right t) interp
