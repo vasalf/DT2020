@@ -1,21 +1,60 @@
+\import Prelude
+\import hw06 (<=-eq, <=-less, <=-view, Sublist, if, slEq, slNeq, slNil)
 \import lect08
 \import Utils
-\open Nat(+,*)
+\open Nat(+,*,zero<=_,suc<=suc)
 
 -- 1. Укажите явно чему равен уровень в каждом из вызовов id' ниже.
 --    Напишите явно чему равны типы всех функций idTest*.
 
 \func id' {A : \Type} (a : A) => a
 
-\func idTest1 => id' (id' id)
-\func idTest2 => id' Maybe
-\func idTest3 => id' Functor
-\func idTest4 => id' (Functor Maybe)
-\func idTest5 (f : \Pi {A B : \Type} -> (A -> B) -> Maybe A -> Maybe B) => id' (Functor Maybe f)
+\func idTest1 : \Pi (A : \Type0) -> A -> A => id' (\suc \lp) (id' (\suc \lp) id)
+\func idTest2 : \Type0 -> \Type0 => id' (\suc \lp) Maybe
+\func idTest3 : \Type1 => id' (\suc (\suc \lp)) Functor
+\func idTest4 : \Type1 => id' (\suc (\suc \lp)) (Functor Maybe)
+\func idTest5 (f : \Pi {A B : \Type0} -> (A -> B) -> Maybe A -> Maybe B) : \Type0 => id' (\suc \lp) (Functor Maybe f)
 
 -- 2. Определите div через Nat-ind.
 
-\func div (n k : Nat) (p : 0 < k) : Nat => {?}
+\func div (n k : Nat)
+          (p : 0 < k)
+  : Nat
+  => Nat-ind (\lam _ => Nat) (r k p) n
+  \where {
+    \func r (k : Nat)
+            (p : 0 < k)
+            (n : Nat)
+            (f : \Pi (t : Nat) -> t < n -> Nat)
+      : Nat \elim k, p, n
+      | suc k, Nat.suc<=suc _, 0     => 0
+      | suc k, Nat.suc<=suc _, suc n => \case totality (suc n) k \with {
+        | inl (q : n < k)      => 0
+        | inr (q : k <= suc n) => \case <=-view k (suc n) q \with {
+          | <=-eq   _ => 1
+          | <=-less l => \let
+            | t => safeMinus n k (\case l \with {| suc<=suc l => l})
+            \in f t.1 (suc<=suc t.2) + 1
+        }
+      }
+    \func safeMinus (n k : Nat)
+                    (p : k <= n)
+      : \Sigma (t : Nat) (t <= n)
+      | n,     0,     zero<=_    => (n, <=-refl)
+      | suc n, suc k, suc<=suc p => \let
+        | rec => safeMinus n k p
+        \in (rec.1, propSuc rec.2)
+    \func propSuc {n k : Nat}
+                  (p : n <= k)
+      : n <= suc k \elim n, k, p
+      | 0,     _,     zero<=_    => zero<=_
+      | suc n, suc k, suc<=suc p => suc<=suc (propSuc p)
+  }
+
+\func divTest1 : div 5 2 (Nat.suc<=suc Nat.zero<=_) = 2 => idp
+\func divTest2 : div 3 2 (Nat.suc<=suc Nat.zero<=_) = 1 => idp
+\func divTest3 : div 2 2 (Nat.suc<=suc Nat.zero<=_) = 1 => idp
+\func divTest4 : div 1 2 (Nat.suc<=suc Nat.zero<=_) = 0 => idp
 
 -- 3. Докажите следующий принцип индукции для списков.
 
@@ -23,11 +62,80 @@
   {A : \Type}
   (E : List A -> \Type)
   (r : \Pi (xs : List A) -> (\Pi (ys : List A) -> length ys < length xs -> E ys) -> E xs)
-  (xs : List A) : E xs => {?}
+  (xs : List A) : E xs => aux E r xs (suc (length xs)) <=-refl
+  \where {
+    \func aux
+      {A : \Type}
+      (E : List A -> \Type)
+      (r : \Pi (xs : List A) -> (\Pi (ys : List A) -> length ys < length xs -> E ys) -> E xs)
+      (xs : List A) (n : Nat) (p : length xs < n) : E xs
+      \elim xs, n, p
+        | nil,       suc n, suc<=suc p => r nil (\lam _ t => \case t \with {})
+        | cons a xs, suc n, suc<=suc p => r (cons a xs) (\lam ys t => aux E r ys n (<=-trans t p))
+  }
 
 -- 4. Реализуйте функцию filter и докажите ее корректность, то есть, что выполнены следующие условия:
 --    * filter p xs является подсписком xs
 --    * Все элементы filter p xs удовлетворяют предикату p
 --    * Любой подсписок xs с тем же свойством является подсписком filter p xs
+
+-- Первые две функции — копипаста из hw06
+
+\func filter {A  : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil       => nil
+  | cons a xs => \case (p a) \with {
+    | true  => cons a (filter p xs)
+    | false => filter p xs
+  }
+
+\func filter-Sublist {A : \Type} (p : A -> Bool) (xs : List A)
+  : Sublist (filter p xs) xs \elim xs
+  | nil => slNil
+  | cons a xs => \case p a \as b \return (helper a p xs b) \with {
+    | true => slEq idp (filter-Sublist p xs)
+    | false => Sublist-helper a (filter-Sublist p xs)
+  }
+  \where {
+    \func helper {A : \Type} (a : A) (p : A -> Bool) (xs : List A) (b : Bool) : \Type
+      => Sublist (\case b \with {
+        | true => cons a (filter p xs)
+        | false => filter p xs
+      }) (cons a xs)
+    \func Sublist-helper {A : \Type} (a : A) {xs ys : List A} (s : Sublist xs ys)
+      : Sublist xs (cons a ys) \elim xs
+      | nil => slNil
+      | cons a l => slNeq s
+  }
+
+\data All {A : \Type} (p : A -> Bool) (xs : List A) \elim xs
+  | nil       => AllNil
+  | cons x xs => AllCons (p x = true) (All p xs)
+
+\func filter-All {A : \Type} (p : A -> Bool) (xs : List A)
+  : All p (filter p xs) \elim xs
+  | nil      => AllNil
+  | cons a xs => \case p a \as b, idp : p a = b \return All p (\case b \with {| true => cons a (filter p xs) | false => filter p xs}) \with {
+    | true,  q => AllCons q (filter-All p xs)
+    | false, q => filter-All p xs
+  }
+
+\func filter-maximal {A : \Type}
+                     (p : A -> Bool)
+                     (xs : List A)
+                     (ys : List A)
+                     (yss : Sublist ys xs)
+                     (ysp : All p ys)
+  : Sublist ys (filter p xs) \elim xs, ys, yss, ysp
+  | _,         nil,       _,          AllNil         => slNil
+  | cons x xs, cons y ys, slEq y=x s, AllCons py=t a
+    => \case p x \as b, idp : p x = b \return Sublist (cons y ys) (\case b \with {| true => cons x (filter p xs) | false => filter p xs}) \with {
+      | true,  q => slEq y=x (filter-maximal p xs ys s a)
+      | false, q => absurd (transport T (sym py=t *> pmap p y=x *> q) ())
+    }
+  | cons x xs, cons y ys, slNeq s,    a
+    => \case p x \as b \return Sublist (cons y ys) (\case b \with {| true => cons x (filter p xs) | false => filter p xs}) \with {
+      | true  => slNeq (filter-maximal p xs (cons y ys) s a)
+      | false => filter-maximal p xs (cons y ys) s a
+    }
 
 -- 5. Бонусное задание: докажите корректность любого алгоритма сортировки, отличного от сортировки вставками.
