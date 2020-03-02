@@ -1,6 +1,6 @@
+\import lect06
 \import lect10
 \import Utils
-\import lect13 (Dec,yes,no)
 
 -- 1. Пусть f : A -> B и g : B -> C ─ некоторые функции.
 --    Докажите, что если f и g инъективны, то g `o` f также инъективна.
@@ -85,7 +85,7 @@
 
 -- 9. Докажите, что тип с разрешимым равенством являетя множеством.
 
-\func Dec-isSet {A : \Type} (dec : \Pi (x y : A) -> Dec (x = y)) : isSet A
+\func Dec-isSet {A : \Type} (dec : \Pi (x y : A) -> Decide (x = y)) : isSet A
   => {?}
 
 -- 10. Если A и B являются множествами, то A `Or` B тоже является множеством.
