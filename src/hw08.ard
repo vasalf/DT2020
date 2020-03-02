@@ -9,6 +9,8 @@
 
 \func id' {A : \Type} (a : A) => a
 
+-- Во всех примерах уровни в типах не будет константными.
+-- В idTest5 уровень id' указан неправильный.
 \func idTest1 : \Pi (A : \Type0) -> A -> A => id' (\suc \lp) (id' (\suc \lp) id)
 \func idTest2 : \Type0 -> \Type0 => id' (\suc \lp) Maybe
 \func idTest3 : \Type1 => id' (\suc (\suc \lp)) Functor
