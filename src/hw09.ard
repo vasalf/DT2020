@@ -1,5 +1,5 @@
 \import lect06
-\import lect10
+\import lect09
 \import Utils
 
 -- 1. Пусть f : A -> B и g : B -> C ─ некоторые функции.
