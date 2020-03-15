@@ -1,6 +1,11 @@
+\import hw05 (pmap2)
+\import lect05 (+-comm, funExt)
 \import lect06
+\import lect07 (Eq)
 \import lect09
 \import Utils
+
+\open Nat
 
 -- 1. Пусть f : A -> B и g : B -> C ─ некоторые функции.
 --    Докажите, что если f и g инъективны, то g `o` f также инъективна.
@@ -9,22 +14,54 @@
 -- Композиция функций
 \func \fixr 9 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam a => g (f a)
 
-\func o-inj {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj f) (q : isInj g) : isInj (g `o` f) => {?}
+\func o-inj {A B C : \Type}
+            (f : A -> B)
+            (g : B -> C)
+            (p : isInj f)
+            (q : isInj g)
+  : isInj (g `o` f) => \lam _ _ r => p _ _ (q _ _ r)
 
-\func o-inj' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj (g `o` f)) : isInj f => {?}
+\func o-inj' {A B C : \Type}
+             (f : A -> B)
+             (g : B -> C)
+             (p : isInj (g `o` f))
+  : isInj f => \lam _ _ r => p _ _ (pmap g r)
 
 -- 2. Определите предикат "делится на 3 или на 5" так, чтобы он возвращал утверждения.
 --    Докажите, что MultipleOf3Or5 вкладывается в ℕ.
 
-\func isMultipleOf3Or5 (n : Nat) : \Type => {?}
+\open Eq
 
-\func isMultipleOf3Or5-isProp (n : Nat) : isProp (isMultipleOf3Or5 n) => {?}
+\instance EqNat : Eq Nat
+  | decideEq (x y : Nat) : Decide (x = y) \elim x, y {
+    | 0, 0         => yes idp
+    | 0, suc y     => no (\lam t => transport (\lam u => T (isZero u)) t ())
+    | suc x, 0     => no (\lam t => transport (\lam u => T (isZero u)) (sym t) ())
+    | suc x, suc y => \case x `decideEq` y \with {
+      | yes p => yes (pmap suc p)
+      | no n  => no (\lam t => n (pmap unsuc t))
+    }
+  }
+  \where {
+    \func unsuc (n : Nat) : Nat
+      | 0     => 0
+      | suc n => n
+    \func isZero (n : Nat) : Bool
+      | 0     => true
+      | suc n => false
+  }
+
+\func isMultipleOf3Or5 (n : Nat) : \Type => T (mod3 n == 0 || mod5 n == 0)
+
+\func isMultipleOf3Or5-isProp (n : Nat)
+  : isProp (isMultipleOf3Or5 n) => \lam _ _ => T-lem
 
 \func MultipleOf3Or5 => \Sigma (n : Nat) (isMultipleOf3Or5 n)
 
 \func Mul-inc (m : MultipleOf3Or5) => m.1
 
-\func Mul-inc-isInj : isInj Mul-inc => {?}
+\func Mul-inc-isInj : isInj Mul-inc
+  => \lam p p' t => sigmaEq (\lam n => T (mod3 n == 0 || mod5 n == 0)) p p' t T-lem
 
 -- 3. Мы будем говорить, что тип A тривиален, если существует элемент в A, такой что любой другой элемент в A равен ему.
 --    Докажите, что тип A тривиален тогда и только тогда, когда A является утверждением и A населен.
@@ -33,18 +70,33 @@
 
 \func \infix 1 <-> (A B : \Type) => \Sigma (A -> B) (B -> A)
 
-\func isTriv-lem (A : \Type) : isTriv A <-> (\Sigma (isProp A) A) => {?}
+\func isTriv-lem (A : \Type)
+  : isTriv A <-> (\Sigma (isProp A) A) => (frw A, bckw A)
+  \where {
+    \func frw  (A : \Type) (p : isTriv A) : (\Sigma (isProp A) A)
+      => (\lam x y => (sym (p.2 x) *> p.2 y), p.1)
+    \func bckw (A : \Type) (p : \Sigma (isProp A) A) : isTriv A
+      => (p.2, p.1 p.2)
+  }
 
 -- 4. Докажите, что Either не является утверждением в общем случаем.
 
-\func Either-isProp (p : \Pi {A B : \Type} (pA : isProp A) (pB : isProp B) -> isProp (Either A B)) : Empty => {?}
+\func Either-isProp
+  (p : \Pi {A B : \Type} (pA : isProp A) (pB : isProp B) -> isProp (Either A B))
+  : Empty
+  => transport (\lam x => T (isLeft x)) (p Unit-isProp Unit-isProp (Either.inl ()) (Either.inr ())) ()
+  \where {
+    \func isLeft {A B : \Type} (e : Either A B) : Bool
+      | Either.inl a => true
+      | Either.inr b => false
+  }
 
 -- 5. Докажите, что \Sigma сохраняет утверждения.
 
 \func Sigma-isProp {A : \Type} (pA : isProp A) (B : A -> \Type)
                     (pB : \Pi (x : A) -> isProp (B x))
   : isProp (\Sigma (x : A) (B x))
-  => {?}
+  => Sigma'-isProp B pA pB -- :)
 
 -- 6. Докажите, что LessOrEq и LessOrEq' являются предикатами.
 
@@ -56,13 +108,39 @@
   | suc m => <=-step (LessOrEq' n m)
   | m => <=-refl (n = m)
 
-\func LessOrEq-isProp {n m : Nat} : isProp (LessOrEq n m) => {?}
+\func LessOrEq-isProp {n m : Nat} : isProp (LessOrEq n m)
+  => impl n m
+  \where {
+    \func impl (n m : Nat) (x y : LessOrEq n m) : x = y
+      | 0,     0,     z<=n,   z<=n   => idp
+      | 0,     suc n, z<=n,   z<=n   => idp
+      | suc n, suc m, s<=s p, s<=s q => pmap s<=s (impl n m p q)
+  }
 
 -- Для решения LessOrEq'-isProp понадобится тот факт, что Nat является множеством.
 -- Сейчас доказывать это не нужно доказывать, доказательство будет приведено позже.
-\func Nat-isSet : isSet Nat => {?}
+\func Nat-isSet : isSet Nat => Dec-isSet EqNat.decideEq
 
-\func LessOrEq'-isProp {n m : Nat} : isProp (LessOrEq' n m) => {?}
+\func LessOrEq'-isProp {n m : Nat} : isProp (LessOrEq' n m)
+  => impl n m
+  \where {
+    \func impl (n m : Nat) (p q : LessOrEq' n m) : p = q \elim m, p, q
+      | m,     <=-refl p, <=-refl q => pmap <=-refl (Nat-isSet n m p q)
+      | suc m, <=-step p, <=-step q => pmap <=-step (impl n m p q)
+      | suc m, <=-step p, <=-refl q => absurd (add-not-leq m 0 (transport (\lam x => LessOrEq' x m) q p))
+      | suc m, <=-refl p, <=-step q => absurd (add-not-leq m 0 (transport (\lam x => LessOrEq' x m) p q))
+    \func add-not-leq (n m : Nat) (p : LessOrEq' (suc (n + m)) n) : Empty \elim n, p
+      | suc n, <=-step p => add-not-leq n (suc m) (transport (\lam x => LessOrEq' x n) (natlem1 n (suc m)) p)
+      | n,     <=-refl p => absurd (natlem2 n m p)
+    \func natlem1 (n m : Nat) : suc n + m = suc (n + m)
+      => sym (+-assoc n 1 m) *> pmap (n `+) (+-comm 1 m)
+    \func natlem2 (n m : Nat) (p : suc (n + m) = n) : Empty \elim n, m
+      | 0,     m => transport (\lam x => T (x == 0)) (sym p) ()
+      | suc n, m => natlem2 n m (sym (natlem1 n m) *> pmap unsuc p)
+    \func unsuc (n : Nat) : Nat
+      | 0     => 0
+      | suc n => n
+  }
 
 -- 7. Докажте, что ReflClosure LessOrEq не является предикатом, а ReflClosure (\lam x y => T (x < y)) является.
 
@@ -75,18 +153,58 @@
   | refl (x = y)
   | inc (R x y)
 
-\func ReflClosure_<-isProp (n m : Nat) : isProp (ReflClosure (\lam x y => T (x < y)) n m) => {?}
+\func ReflClosure_<-isProp (n m : Nat)
+  : isProp (ReflClosure (\lam x y => T (x < y)) n m)
+  => \lam p q => \case \elim p, \elim q \with {
+    | refl p, refl q => pmap refl (Nat-isSet n m p q)
+    | refl p, inc q  => absurd (lem n m q p)
+    | inc p,  refl q => absurd (lem n m p q)
+    | inc p,  inc q  => pmap inc T-lem
+  }
+  \where {
+    \func lem (n m : Nat) (p : T (n < m)) (q : n = m) : Empty \elim n, m
+      | 0,     0     => p
+      | 0,     suc m => absurd (suc/=0 (sym q))
+      | suc n, 0     => p
+      | suc n, suc m => lem n m p (pmap unsuc q)
+    \func unsuc (n : Nat) : Nat
+      | 0     => 0
+      | suc n => n
+  }
 
-\func ReflClosure_<=-isNotProp (p : \Pi (n m : Nat) -> isProp (ReflClosure LessOrEq n m)) : Empty => {?}
+\func ReflClosure_<=-isNotProp
+  (p : \Pi (n m : Nat) -> isProp (ReflClosure LessOrEq n m)) : Empty
+  => \let
+     | a => refl idp
+     | b => inc (s<=s z<=n)
+    \in transport (\lam x => T (isRefl x)) (p 1 1 a b) ()
+  \where {
+    \func isRefl {A : Nat -> Nat -> \Type} {n m : Nat} (p : ReflClosure A n m) : Bool
+      | refl _ => true
+      | inc  _ => false
+  }
 
 -- 8. Докажите, что если тип A вкладывается в тип B и B является утверждением, то и A является утверждением.
 
-\func sub-isProp {A B : \Type} (f : A -> B) (p : isInj f) (q : isProp B) : isProp A => {?}
+\func sub-isProp {A B : \Type}
+                 (f : A -> B)
+                 (p : isInj f)
+                 (q : isProp B)
+  : isProp A => \lam x y => p x y (q (f x) (f y))
 
 -- 9. Докажите, что тип с разрешимым равенством являетя множеством.
 
-\func Dec-isSet {A : \Type} (dec : \Pi (x y : A) -> Decide (x = y)) : isSet A
-  => {?}
+\func Dec-isSet {A : \Type}
+                (dec : \Pi (x y : A) -> Decide (x = y))
+  : isSet A => {?}
+
+-- LOL WTF!!!
+\func isSet! (A : \Type) : isSet A
+  => \lam x y p q => \case \elim y, \elim p \with {
+    | y, idp => \case \elim y, \elim q \with {
+      | y, idp => idp
+    }
+  }
 
 -- 10. Если A и B являются множествами, то A `Or` B тоже является множеством.
 
@@ -94,13 +212,113 @@
   | inl A
   | inr B
 
-\func or-isSet {A B : \Type} (p : isSet A) (q : isSet B) : isSet (Or A B) => {?}
+\func or-isSet {A B : \Type}
+               (p : isSet A)
+               (q : isSet B)
+  : isSet (Or A B) => \lam x y =>
+    \case \elim x, \elim y \with {
+      | inl a, inl b => retract-isProp (p a b) (pmap (uninl a)) (pmap inl) double-pmap-l
+      | inl a, inr b => \lam t => absurd (transport (\lam x => T (isLeft x)) t ())
+      | inr a, inl b => \lam t => absurd (transport (\lam x => T (isLeft x)) (sym t) ())
+      | inr a, inr b => retract-isProp (q a b) (pmap (uninr a)) (pmap inr) double-pmap-r
+    } \where {
+      \func isLeft {A B : \Type} (e : Or A B) : Bool \elim e
+        | inl a => true
+        | inr b => false
+      \func uninl {A B : \Type} (a : A) (e : Or A B) : A \elim e
+        | inl a => a
+        | inr b => a
+      \func uninr {A B : \Type} (b : B) (e : Or A B) : B \elim e
+        | inl a => b
+        | inr b => b
+      \func double-pmap-l {A B : \Type} {x y : A} (p : inl {A} {B} x = inl y)
+        : pmap inl (pmap (uninl x) p) = p
+        => pmap-l-elim (inl x) (inl y) x p () *> pmap (`*> (sym idp)) (idp-left p)
+      \func uninl-inv {A B : \Type} (x : Or A B) (z : A) (q : T (isLeft x))
+        : inl (uninl z x) = x \elim x, q
+        | inl _, () => idp
+      \func pmap-l-elim {A B : \Type} (x y : Or A B) (z : A) (p : x = y) (q : T (isLeft x))
+        : pmap inl (pmap (uninl z) p) = (uninl-inv x z q) *> p *> (sym (uninl-inv y z (transport (\lam w => T (isLeft w)) p q))) \elim x, p, q
+        | inl _, idp, () => idp
+      \func double-pmap-r {A B : \Type} {x y : B} (p : inr {A} x = inr y)
+        : pmap inr (pmap (uninr x) p) = p
+        => pmap-r-elim (inr x) (inr y) x p () *> pmap (`*> (sym idp)) (idp-left p)
+      \func uninr-inv {A B : \Type} (x : Or A B) (z : B) (q : T (not (isLeft x)))
+        : inr (uninr z x) = x \elim x, q
+        | inr _, q => idp
+      \func pmap-r-elim {A B : \Type} (x y : Or A B) (z : B) (p : x = y) (q : T (not (isLeft x)))
+        : pmap inr (pmap (uninr z) p) = (uninr-inv x z q) *> p *> (sym (uninr-inv y z (transport (\lam w => T (not (isLeft w))) p q))) \elim x, p, q
+        | inr _, idp, () => idp
+}
 
 -- 11. Если B x является множеством, то \Pi (x : A) -> B x тоже является множеством.
 
-\func pi-isSet {A : \Type} (B : A -> \Type) (p : \Pi (x : A) -> isSet (B x)) : isSet (\Pi (x : A) -> B x) => {?}
+\func pi-isSet {A : \Type}
+               (B : A -> \Type)
+               (p : \Pi (x : A) -> isSet (B x))
+  : isSet (\Pi (x : A) -> B x)
+  => \lam f g => retract'-isProp
+      {f = g}
+      {\Pi (x : A) -> f x = g x}
+      (\lam h k => funExt (\lam x => f x = g x) (\lam a => p a (f a) (g a) (h a) (k a)))
+      (funExt B)
+      (\lam q => (\lam x => pmap (app {A} {B} x) q, \case \elim f, \elim q \with { | _, idp => idp }))
+  \where {
+    \func app {A : \Type} {B : A -> \Type} (x : A) (f : \Pi (x : A) -> B x)
+      : B x => f x
+  }
 
 -- 12. Докажите, что если A является множеством, то List A также им является.
 
-\func List-isSet {A : \Type} (pA : isSet A) : isSet (List A)
-  => {?}
+\func List-isSet {A : \Type} (pA : isSet A) : isSet (List A) => ListEq-isProp pA
+
+\func ListEq-isProp {A : \Type} (pA : isSet A) (xs : List A) (ys : List A) : isProp (xs = ys)
+  \elim xs, ys
+    | nil,       nil       => init A
+    | nil,       cons y ys => \lam p => absurd (transport (\lam xs => T (isNil xs)) p ())
+    | cons x xs, nil       => \lam p => absurd (transport (\lam xs => T (isNil xs)) (sym p) ())
+    | cons x xs, cons y ys => ind (pA x y) (ListEq-isProp pA xs ys)
+  \where {
+    \func isNil {A : \Type} (xs : List A) : Bool
+      | nil      => true
+      | cons _ _ => false
+    \func init (A : \Type)
+      : isProp (nil {A} = nil)
+      => impl nil ()
+    \where {
+      \func impl {A : \Type} (xs : List A) (tx : T (isNil xs))
+        : isProp (xs = nil) => retract-isProp
+          {xs = nil}
+          Unit-isProp
+          (\lam _ => ())
+          (\lam _ => \case \elim xs, tx \with {| nil, () => idp})
+          (\lam p => \case \elim xs, \elim p \with {| _, idp => idp})
+    }
+    \func head {A : \Type}
+               (x : A)
+               (xs : List A)
+      : A \elim xs
+      | nil       => x
+      | cons y xs => y
+    \func tail {A : \Type}
+               (xs : List A)
+      : List A \elim xs
+      | nil       => nil
+      | cons _ xs => xs
+    -- Удивительно, но \let связывает имя с выражением как idp и это дофига помогает!
+    \func ind {A : \Type}
+              {x y : A}
+              (px : isProp (x = y))
+              {xs ys : List A}
+              (ps : isProp (xs = ys))
+      : isProp (cons x xs = cons y ys)
+      => \let
+          | yys => cons y ys
+         \in retract-isProp
+               {cons x xs = yys}
+               {\Sigma (x = y) (xs = ys)}
+               (Sigma-isProp px (\lam _ => xs = ys) (\lam _ => ps))
+               (\lam p => (pmap (head x) p, pmap tail p))
+               (\lam t => pmap2 cons t.1 t.2)
+               (\lam r => \case \elim yys, \elim r \with {| _, idp => idp })
+  }
