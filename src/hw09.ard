@@ -322,3 +322,8 @@
                (\lam t => pmap2 cons t.1 t.2)
                (\lam r => \case \elim yys, \elim r \with {| _, idp => idp })
   }
+
+-- 13. Докажите, что n-типы замкнуты относительно образования \Pi-типов.
+--     Hint: Доказательство по индукции. Для случая suc n нужно доказать, что если f,g : \Pi (x : A) -> B x, то f = g эквивалентно \Pi (x : A) -> f x = g x.
+
+\func levelPi {A : \Type} (B : A -> \Type) (n : Nat) (p : \Pi (x : A) -> B x `hasLevel` n) : (\Pi (x : A) -> B x) `hasLevel` n => {?}
