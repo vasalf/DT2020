@@ -1,3 +1,4 @@
+\import lect05 (funExt)
 \import lect10
 \import Utils \hiding (transport,Or,inl,inr)
 
@@ -6,18 +7,40 @@
 \data Dec (A : \Prop)
   | yes A
   | no (A -> Empty)
+  \where {
+    \use \level dataIsProp {A : \Prop} (d1 d2 : Dec A) : d1 = d2
+      | yes y1, yes y2 => pmap yes (Path.inProp y1 y2)
+      | no  n1, no  n2 => pmap no (funExt (\lam _ => Empty) (\lam a => Path.inProp (n1 a) (n2 a)))
+      | yes y,  no  n  => absurd (n y)
+      | no  n,  yes y  => absurd (n y)
+  }
 
--- \func testDec : \Prop -> \Prop => Dec
+\func testDec : \Prop -> \Prop => Dec
 
 -- 2. Докажите, что если A : \Prop, то Trunc A эквивалентен A.
 
 \func \infix 1 <-> (A B : \Type) => \Sigma (A -> B) (B -> A)
 
-\func trunc-prop {A : \Prop} : Trunc A <-> A => {?}
+\func trunc-prop {A : \Prop} : Trunc A <-> A
+  => (untrunc, trunc)
+  \where {
+    \func untrunc {A : \Prop} (a : Trunc A) : A
+      | trunc a => a
+  }
+
 
 -- 3. Докажите следующий закон де Моргана.
 
-\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C)) => {?}
+\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C))
+  => (lr, rl)
+  \where {
+    \func lr {A B C : \Prop} (e : \Sigma A (B `Or` C)) : (\Sigma A B) `Or` (\Sigma A C)
+      | (a, inl b) => inl (a, b)
+      | (a, inr c) => inr (a, c)
+    \func rl {A B C : \Prop} (e : (\Sigma A B) `Or` (\Sigma A C)) : \Sigma A (B `Or` C)
+      | inl (a, b) => (a, inl b)
+      | inr (a, c) => (a, inr c)
+  }
 
 -- 4. Определите элиминатор для Or через Or-rec, не используя паттерн матчинг на Or.
 
